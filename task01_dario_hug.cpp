@@ -47,10 +47,11 @@ void save_to_csv(const std::string& filename, const std::vector<std::vector<doub
     file.close();
 }
 
+
 int main(int argc, char* argv[]) {
     // A bit of defensive coding
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <timesteps>" << "filename" << "starting profile" << std::endl;
+    if (argc < 5) {
+        std::cerr << "Usage: " << argv[0] << " <timesteps>" << "filename" << "starting profile" << "method" << std::endl;
         return 1;
     }
     
@@ -61,11 +62,12 @@ int main(int argc, char* argv[]) {
     }
     std::string filename = argv[2];
     std::string starting_profile = argv[3];
+    std::string method = argv[4];
 
     // Parameters
     const double v0 = 1.0;
     const double x_min = 0.0, x_max = 1.0;
-    int N = 100;
+    int N = 500;
     double dx = (x_max - x_min) / N;
     double dt = 0.5 * dx / v0; // given CFL condition
 
@@ -79,17 +81,60 @@ int main(int argc, char* argv[]) {
     std::vector<std::vector<double>> results;
     results.push_back(f);
 
-    // time integration loop
-    for (int t = 0; t < timesteps; ++t) {
-        for (int i = 0; i < N; ++i) {
-            // first-order upwind differencing
-            int i_upwind = (i == 0) ? N - 1 : i - 1; // be sure to exclude i == -1
-            f_new[i] = f[i] - v0 * dt / dx * (f[i] - f[i_upwind]); // compute gridpoint at next timestep 
+
+    if (method == "firstOrderEuler") {
+
+        // Time integration loop
+        for (int t = 0; t < timesteps; ++t) {
+            for (int i = 0; i < N; ++i) {
+                
+                int i_upwind = (i == 0) ? N - 1 : i - 1; // make sure i does not escape boundry
+
+                double dfdx = -v0 * (f[i] - f[i_upwind]) / dx; // Spatial derivative 
+
+                f_new[i] = f[i] + dt * dfdx; // Firts-order-Euler 
+
+            }
+
+            f = f_new; // f_new has the updated values for the next timestep
+            results.push_back(f); // Save current state
         }
 
-        f = f_new; // Update solution
-        results.push_back(f); // Save current state
+    } else if (method == "RK2") {
+
+        // Time integration loop
+        for (int t = 0; t < timesteps; ++t) {
+            std::vector<double> k1(N, 0.0), k2(N, 0.0);
+
+            // Compute k1 for every position
+            for (int i = 0; i < N; ++i) {
+                int i_upwind = (i == 0) ? N - 1 : i - 1; // Periodic boundary condition
+                k1[i] = -v0 * (f[i] - f[i_upwind]) / dx; // Spatial derivative
+            }
+
+            // Compute k2 for every position
+            for (int i = 0; i < N; ++i) {
+                int i_upwind = (i == 0) ? N - 1 : i - 1;
+                double f_temp = f[i] + dt * k1[i];
+                double f_upwind_temp = f[i_upwind] + dt * k1[i_upwind];
+                k2[i] = -v0 * (f_temp - f_upwind_temp) / dx;
+            }
+
+            // Update the solution for every position
+            for (int i = 0; i < N; ++i) {
+                f[i] = f[i] + (dt / 2.0) * (k1[i] + k2[i]);
+            }
+
+            // Save the updated state
+            results.push_back(f);
+        }
+
+    } else {
+        std::cerr << "Undefined Method. Methods include: [forwardEuler, RK2]" << std::endl;
+        return 1;
     }
+
+
 
     // Save results to a file
     save_to_csv(filename, results, dx, dt);
