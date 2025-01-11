@@ -50,8 +50,8 @@ void save_to_csv(const std::string& filename, const std::vector<std::vector<doub
 
 int main(int argc, char* argv[]) {
     // A bit of defensive coding
-    if (argc < 5) {
-        std::cerr << "Usage: " << argv[0] << " <timesteps>" << "filename" << "starting profile" << "method" << std::endl;
+    if (argc < 6) {
+        std::cerr << "Usage: " << argv[0] << " <timesteps>" << "filename" << "Resolution" << "starting profile" << "method" << std::endl;
         return 1;
     }
     
@@ -60,14 +60,15 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: timesteps must be a positive integer." << std::endl;
         return 1;
     }
+    int resolution = std::atoi(argv[3]);
     std::string filename = argv[2];
-    std::string starting_profile = argv[3];
-    std::string method = argv[4];
-
+    std::string starting_profile = argv[4];
+    std::string method = argv[5];
+    
     // Parameters
     const double v0 = 1.0;
     const double x_min = 0.0, x_max = 1.0;
-    int N = 500;
+    int N = resolution;
     double dx = (x_max - x_min) / N;
     double dt = 0.5 * dx / v0; // given CFL condition
 
@@ -81,14 +82,12 @@ int main(int argc, char* argv[]) {
     std::vector<std::vector<double>> results;
     results.push_back(f);
 
-
     if (method == "firstOrderEuler") {
-
         // Time integration loop
         for (int t = 0; t < timesteps; ++t) {
             for (int i = 0; i < N; ++i) {
                 
-                int i_upwind = (i == 0) ? N - 1 : i - 1; // make sure i does not escape boundry
+                int i_upwind = (i == 0) ? N - 1 : i - 1; // Periodic boundary for i-1
 
                 double dfdx = -v0 * (f[i] - f[i_upwind]) / dx; // Spatial derivative 
 
@@ -101,46 +100,49 @@ int main(int argc, char* argv[]) {
         }
 
     } else if (method == "RK2") {
-
         // Time integration loop
         for (int t = 0; t < timesteps; ++t) {
-            std::vector<double> k1(N, 0.0), k2(N, 0.0);
-
-            // Compute k1 for every position
             for (int i = 0; i < N; ++i) {
-                int i_upwind = (i == 0) ? N - 1 : i - 1; // Periodic boundary condition
-                k1[i] = -v0 * (f[i] - f[i_upwind]) / dx; // Spatial derivative
+                int i_minus_1 = (i == 0) ? N - 1 : i - 1;  // Periodic boundary for i-1
+
+                // Predictor step (Euler step)
+                double dfdx_predictor = -v0 * (f[i] - f[i_minus_1]) / dx;
+                double f_predictor = f[i] + dt * dfdx_predictor;
+
+                // Corrector step
+                double dfdx_corrector = -v0 * (f_predictor - f[i_minus_1]) / dx;
+                f_new[i] = f[i] + 0.5 * dt * (dfdx_predictor + dfdx_corrector);
             }
 
-            // Compute k2 for every position
-            for (int i = 0; i < N; ++i) {
-                int i_upwind = (i == 0) ? N - 1 : i - 1;
-                double f_temp = f[i] + dt * k1[i];
-                double f_upwind_temp = f[i_upwind] + dt * k1[i_upwind];
-                k2[i] = -v0 * (f_temp - f_upwind_temp) / dx;
-            }
-
-            // Update the solution for every position
-            for (int i = 0; i < N; ++i) {
-                f[i] = f[i] + (dt / 2.0) * (k1[i] + k2[i]);
-            }
-
-            // Save the updated state
-            results.push_back(f);
+            f = f_new;  // Update solution for the next timestep
+            results.push_back(f);  // Save current state
         }
+    } else if (method == "laxWendroff") {
+        // Time integration loop
+        for (int t = 0; t < timesteps; ++t) {
+            for (int i = 0; i < N; ++i) {
+                int i_upwind = (i == 0) ? N - 1 : i - 1;     // Periodic boundary for i-1
+                int i_downwind = (i == N - 1) ? 0 : i + 1;   // Periodic boundary for i+1
 
+                // Compute fluxes using Lax-Wendroff scheme
+                double advective_term = -0.5 * (v0 * dt / dx) * (f[i_downwind] - f[i_upwind]);
+                double diffusive_term = 0.5 * (v0 * v0 * dt * dt / (dx * dx)) * (f[i_downwind] - 2 * f[i] + f[i_upwind]);
+
+                f_new[i] = f[i] + advective_term + diffusive_term; // Update next timestep
+            }
+
+            f = f_new; // Update f for the next timestep
+            results.push_back(f); // Save current state
+        }
     } else {
-        std::cerr << "Undefined Method. Methods include: [forwardEuler, RK2]" << std::endl;
+        std::cerr << "Undefined Method. Methods include: [forwardEuler, RK2, laxWendroff]" << std::endl;
         return 1;
-    }
-
-
+            }
 
     // Save results to a file
     save_to_csv(filename, results, dx, dt);
 
-    std::string return_message = "Simulations completed, results saved in: ";
-    std::cout << return_message << filename << std::endl;
+    std::cout << "Simulations completed, results saved in: " << filename << std::endl;
 
     return 0;
 }
