@@ -23,7 +23,8 @@ void initialize(std::vector<double>& f, double dx, const std::string& profile) {
             f[i] = 1.0 + std::exp(-std::pow(x - 0.5, 2) / (2 * sigma * sigma));
         }
     } else {
-        std::cerr << "Unknown profile" << std::endl;
+        std::cerr << "Unknown profile:" << profile;
+        return;
     }
 }
 
@@ -62,7 +63,6 @@ int main(int argc, char* argv[]) {
     int resolution = std::atoi(argv[3]);
     std::string filename = argv[2];
     std::string starting_profile = argv[4];
-    std::string slope_lim_method = argv[5];
 
     std::cout << starting_profile << std::endl;
     
@@ -83,6 +83,8 @@ int main(int argc, char* argv[]) {
     std::vector<std::vector<double>> results;
     results.push_back(f);
 
+    
+
     // Time integration loop
     for (int t = 0; t < timesteps; ++t) {
         for (int i = 0; i < N; ++i) {
@@ -97,19 +99,9 @@ int main(int argc, char* argv[]) {
 
             double phi_right, phi_left; 
 
-            if (slope_lim_method == "vanleer") {
-
-                // Van Leer slope limiter
-                double phi_right = (r_right + std::abs(r_right)) / (1.0 + std::abs(r_right));
-                double phi_left = (r_left + std::abs(r_left)) / (1.0 + std::abs(r_left));
-                
-            } else if (slope_lim_method == "minmod") {
-
-                // MinMod slope limiter
-                double phi_right = std::max(0.0, std::min(2*r_right, std::min((1 + 2 * r_right) / 3.0, 2.0)));
-                double phi_left = std::max(0.0, std::min(2*r_left, std::min((1 + 2 * r_left) / 3.0, 2.0)));
-
-            } else {std::cerr << "not a valid slope limiter method." << std::endl; }
+            // Van Leer slope limiter
+            double phi_right = (r_right + std::abs(r_right)) / (1.0 + std::abs(r_right));
+            double phi_left = (r_left + std::abs(r_left)) / (1.0 + std::abs(r_left));
 
             // Reconstruct left and right states for box boundry F(i+1/2)
             double f_L_right = f[i] + 0.5 * phi_right * (f[i_downwind] - f[i]);
