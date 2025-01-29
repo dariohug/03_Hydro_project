@@ -60,14 +60,14 @@ int main(int argc, char* argv[]) {
     std::string starting_profile = argv[2];
     std::string method = argv[3];
     int resolution = std::atoi(argv[4]);
-    double diffusion_coeficient = std::atof(argv[5]);
+    double diffusion_coefficient = std::atof(argv[5]);
 
     // Parameters
     const double v0 = 1.0;
     const double x_min = 0.0, x_max = 1.0;
     int N = resolution;
     double dx = (x_max - x_min) / N;
-    double dt = dx * dx / (4 * diffusion_coeficient); // CFL Condition
+    double dt = dx * dx / (2 * diffusion_coefficient); // CFL Condition
     double t_max = 1.0;
     int timesteps = static_cast<int>(t_max / dt);
 
@@ -82,6 +82,10 @@ int main(int argc, char* argv[]) {
     results.push_back(f);
 
     if (method == "firstOrderEuler") {
+        double optimal_d = (v0 * dx)/(2*(1-((v0 *dt)/dx)));
+        if (diffusion_coefficient != optimal_d) {std::cout << "diffusion Coeff incorrect, should be: " << optimal_d << " is: " << diffusion_coefficient << std::endl;}
+        std::cout << "dx= " << dx << std::endl;
+        
         // Time integration loop
         for (int t = 0; t < timesteps; ++t) {
             for (int i = 0; i < N; ++i) {
@@ -89,15 +93,19 @@ int main(int argc, char* argv[]) {
                 int i_upwind = (i == 0) ? N - 1 : i - 1;    // Periodic boundary for i-1
                 int i_downwind = (i == N - 1) ? 0 : i + 1;  // Periodic boundary for i+1
 
-                double d2fdx2 = (f[i_downwind] - 2 * f[i] + f[i_upwind]) / dx; // Second spatial derivative 
+                double d2fdx2 = (f[i_downwind] - 2 * f[i] + f[i_upwind]) / dx * dx; // Second spatial derivative 
 
-                f_new[i] = f[i] + dt * d2fdx2; // Firts-order-Euler 
+                f_new[i] = f[i] + (dt / dx) * d2fdx2; // Firts-order-Euler 
             }
             f = f_new; // f_new has the updated values for the next timestep
             results.push_back(f); // Save current state
         }
 
     } else if (method == "RK2") {
+        double optimal_d = (v0 * dx)/2;
+        if (diffusion_coefficient != optimal_d) {std::cout << "diffusion Coeff incorrect, should be: " << optimal_d << " is: " << diffusion_coefficient << std::endl;}
+        std::cout << "dx= " << dx << std::endl;
+
         // Time integration loop
         for (int t = 0; t < timesteps; ++t) {
             std::vector<double> k1(N, 0.0);
@@ -108,8 +116,8 @@ int main(int argc, char* argv[]) {
                 int i_upwind = (i == 0) ? N - 1 : i - 1;    // Periodic boundary for i-1
                 int i_downwind = (i == N - 1) ? 0 : i + 1;  // Periodic boundary for i+1
 
-                double d2fdx2 = (f[i_downwind] - 2 * f[i] + f[i_upwind]) / dx; // Second spatial derivative
-                k1[i] = dt * d2fdx2; // First step
+                double d2fdx2 = (f[i_downwind] - 2 * f[i] + f[i_upwind]) / dx * dx; // Second spatial derivative
+                k1[i] = (dt / dx) * d2fdx2; // First step
             }
 
             // Compute k2 (use intermediate state)
@@ -117,8 +125,8 @@ int main(int argc, char* argv[]) {
                 int i_upwind = (i == 0) ? N - 1 : i - 1;    // Periodic boundary for i-1
                 int i_downwind = (i == N - 1) ? 0 : i + 1;  // Periodic boundary for i+1
 
-                double d2fdx2 = ((f[i] + k1[i_downwind]) - 2 * (f[i] + k1[i]) + (f[i_upwind] + k1[i_upwind])) / dx;
-                k2[i] = dt * d2fdx2; // Second step
+                double d2fdx2 = ((f[i_downwind] + k1[i_downwind]) - 2 * (f[i] + k1[i]) + (f[i_upwind] + k1[i_upwind])) / dx * dx;
+                k2[i] = (dt / dx) * d2fdx2; // Second step
             }
 
             // Update solution with RK2 formula
