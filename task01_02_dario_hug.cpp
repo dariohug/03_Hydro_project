@@ -91,7 +91,8 @@ int main(int argc, char* argv[]) {
             int i_upwind = (i == 0) ? N - 1 : i - 1;
             int i_downwind = (i == N - 1) ? 0 : i + 1;
 
-            // Compute slope ratio r for Van Leer limiter
+            // Compute slope ratio r for slope limiter
+            // Slope ratio 
             double r_right = (f[i] - f[i_upwind]) / (f[i_downwind] - f[i] + 1e-8); // For F_{i+1/2} -> Ensure denominator != 0
             double r_left = (f[i_upwind] - f[i]) / (f[i] - f[i_upwind] + 1e-8); // For F_{i-1/2} -> Ensure denominator != 0
 
