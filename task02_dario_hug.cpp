@@ -70,6 +70,8 @@ int main(int argc, char* argv[]) {
     // double dt = (method == "RK2") ? dx * dx / (4 * diffusion_coefficient) : (dx/v0) - (2 * diffusion_coefficient / (v0 + v0)); // CFL Condition
     double dt = dx * dx / (16 * diffusion_coefficient);
     double t_max = 1.0;
+    // The number of timesteps has been adjusted to have more instights into the interesting parts of the simulation
+    // It can easily be realtered to ts = tmax / dt
     int timesteps = static_cast<int>(t_max / (8 * dt));
 
     std::vector<double> f(N, 0.0); // Initialize the starting condition grid
