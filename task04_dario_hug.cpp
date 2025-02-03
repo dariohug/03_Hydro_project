@@ -71,10 +71,9 @@ void save_to_csv(const std::string &filename, const std::vector<std::vector<std:
     file.close();
 }
 
-void solve_advection_equation(std::vector<std::vector<double>> &f, int N, double dx, double dt, double v0, const std::string &slope_lim_method)
+void solve_advection_equation(std::vector<std::vector<double>> &f, int N, double dx, double dy, double dt, double vx0, double vy0, const std::string &slope_lim_method, bool solve_x)
 {
     std::vector<std::vector<double>> f_new(N, std::vector<double>(N, 0.0));
-    const double epsilon = 1e-6;
 
     for (int i = 0; i < N; ++i)
     {
@@ -85,17 +84,40 @@ void solve_advection_equation(std::vector<std::vector<double>> &f, int N, double
             int j_upwind = (j - 1 + N) % N;
             int j_downwind = (j + 1) % N;
 
-            double r_right = (f[i][j] - f[i_upwind][j]) / (f[i_downwind][j] - f[i][j] + epsilon);
-            double r_left = (f[i_upwind][j] - f[i][j]) / (f[i][j] - f[i_upwind][j] + epsilon);
+            if (solve_x)
+            {
+                // Solve MUSCL for x-direction
+                double denominator_r_right_x = (f[i_downwind][j] - f[i][j] == 0.0) ? 1e-9 : f[i_downwind][j] - f[i][j];
+                double r_right_x = (f[i][j] - f[i_upwind][j]) / denominator_r_right_x;
 
-            double phi = (slope_lim_method == "vanleer")  ? (r_right + std::abs(r_right)) / (1.0 + std::abs(r_right))
-                         : (slope_lim_method == "minmod") ? std::max(0.0, std::min(1.0, r_right))
-                                                          : 1.0;
+                double denominator_r_left_x = (f[i][j] - f[i_upwind][j] == 0.0) ? 1e-9 : f[i][j] - f[i_upwind][j];
+                double r_left_x = (f[i_upwind][j] - f[i][j]) / denominator_r_left_x;
 
-            double F_right = v0 * ((v0 > 0) ? (f[i][j] + 0.5 * phi * (f[i_downwind][j] - f[i][j])) : f[i_downwind][j]);
-            double F_left = v0 * ((v0 > 0) ? (f[i_upwind][j] + 0.5 * phi * (f[i][j] - f[i_upwind][j])) : f[i][j]);
+                double phi_right_x = (slope_lim_method == "vanleer") ? (r_right_x + std::abs(r_right_x)) / (1.0 + std::abs(r_right_x)) : std::max(0.0, std::min(r_right_x, 1.0));
+                double phi_left_x = (slope_lim_method == "vanleer") ? (r_left_x + std::abs(r_left_x)) / (1.0 + std::abs(r_left_x)) : std::max(0.0, std::min(r_left_x, 1.0));
 
-            f_new[i][j] = f[i][j] - (dt / dx) * (F_right - F_left);
+                double F_right_x = vx0 * ((vx0 > 0) ? (f[i][j] + 0.5 * phi_right_x * (f[i_downwind][j] - f[i][j])) : f[i_downwind][j]);
+                double F_left_x = vx0 * ((vx0 > 0) ? (f[i_upwind][j] + 0.5 * phi_left_x * (f[i][j] - f[i_upwind][j])) : f[i][j]);
+
+                f_new[i][j] = f[i][j] - (dt / dx) * (F_right_x - F_left_x);
+            }
+            else
+            {
+                // Solve MSUCL for y-direction
+                double denominator_r_right_y = (f[i][j_downwind] - f[i][j] == 0.0) ? 1e-9 : f[i][j_downwind] - f[i][j];
+                double r_right_y = (f[i][j] - f[i][j_upwind]) / denominator_r_right_y;
+
+                double denominator_r_left_y = (f[i][j] - f[i][j_upwind] == 0.0) ? 1e-9 : f[i][j] - f[i][j_upwind];
+                double r_left_y = (f[i][j_upwind] - f[i][j]) / denominator_r_left_y;
+
+                double phi_right_y = (slope_lim_method == "vanleer") ? (r_right_y + std::abs(r_right_y)) / (1.0 + std::abs(r_right_y)) : std::max(0.0, std::min(r_right_y, 1.0));
+                double phi_left_y = (slope_lim_method == "vanleer") ? (r_left_y + std::abs(r_left_y)) / (1.0 + std::abs(r_left_y)) : std::max(0.0, std::min(r_left_y, 1.0));
+
+                double F_right_y = vy0 * ((vy0 > 0) ? (f[i][j] + 0.5 * phi_right_y * (f[i][j_downwind] - f[i][j])) : f[i][j_downwind]);
+                double F_left_y = vy0 * ((vy0 > 0) ? (f[i][j_upwind] + 0.5 * phi_left_y * (f[i][j] - f[i][j_upwind])) : f[i][j]);
+
+                f_new[i][j] = f[i][j] - (dt / dy) * (F_right_y - F_left_y);
+            }
         }
     }
     f = f_new;
@@ -115,7 +137,7 @@ int main(int argc, char *argv[])
     std::string starting_profile = argv[4];
     std::string slope_lim_method = argv[5];
 
-    const double vx0 = 1.0 / std::sqrt(2), vy0 = 1.0 / std::sqrt(2);
+    const double vx0 = 1.0, vy0 = 1.0;
     const double x_min = 0.0, x_max = 1.0, y_min = 0.0, y_max = 1.0;
     int N = resolution;
     double dx = (x_max - x_min) / N, dy = (y_max - y_min) / N;
@@ -129,9 +151,9 @@ int main(int argc, char *argv[])
 
     for (int t = 0; t < timesteps; ++t)
     {
-        solve_advection_equation(f, N, dy, dt / 2, vy0, slope_lim_method);
-        solve_advection_equation(f, N, dx, dt, vx0, slope_lim_method);
-        solve_advection_equation(f, N, dy, dt / 2, vy0, slope_lim_method);
+        solve_advection_equation(f, N, dx, dy, dt / 2, vx0, vy0, slope_lim_method, true); // Half a step in x direction
+        solve_advection_equation(f, N, dx, dy, dt, vx0, vy0, slope_lim_method, false);    // Full step in y Direction
+        solve_advection_equation(f, N, dx, dy, dt / 2, vx0, vy0, slope_lim_method, true); // Half a step in x direction
         results.push_back(f);
     }
 
